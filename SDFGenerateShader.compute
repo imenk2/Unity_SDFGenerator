@@ -82,6 +82,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
 
 RWTexture2DArray<float4> TextureArray;
 int Count;
+float Smooth;
 
 float SmoothUnion(float sdf1, float sdf2, float bandwidth)
 {
@@ -103,7 +104,7 @@ void MultiTexture (uint3 id : SV_DispatchThreadID)
     {
         float sdf1 = TextureArray[uint3(id.xy, i-1)].r;
         float sdf2 = TextureArray[uint3(id.xy, i)].r;
-        sum += SmoothIntersection(sdf1, sdf2, 1/_HalfRange);
+        sum += SmoothIntersection(sdf1, sdf2, Smooth);
     }
     _OutputTexture[id.xy] = float4(sum / Count, 0,0,1);
 }

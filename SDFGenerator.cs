@@ -33,9 +33,11 @@ public class SDFGenerator : EditorWindow
     private ChannelType channel = ChannelType.RGB;
     private ComputeShader cs;
     private int spread = 16;
+    private float smooth = 0.1f;
     private RenderTexture texArray;
     RenderTexture rt;
-    private float slider = 1f;
+    private float slider = 0.5f;
+    private Vector2 scrollPosition = Vector2.zero;
 
         public void OnGUI()
     {
@@ -43,9 +45,13 @@ public class SDFGenerator : EditorWindow
         switch (sm)
         {
             case SwichModel.Single:
+                channel = (ChannelType)EditorGUILayout.EnumPopup("生成通道", channel);
                 tex = EditorGUILayout.ObjectField("图片", tex, typeof(Texture2D), false) as Texture2D;
-                if (tex == null) return;
-                dataPath = AssetDatabase.GetAssetPath(tex);
+                if (tex != null)
+                {
+                    dataPath = AssetDatabase.GetAssetPath(tex);
+                }
+                texs.Clear();
                 break;
 
             case SwichModel.Multi:
@@ -60,8 +66,8 @@ public class SDFGenerator : EditorWindow
 
         cs = EditorGUILayout.ObjectField("Shader", cs, typeof(ComputeShader)) as ComputeShader;
 
-        channel = (ChannelType)EditorGUILayout.EnumPopup("生成通道", channel);
         spread = EditorGUILayout.IntField("Spread", spread);
+        smooth = EditorGUILayout.Slider("Smooth", smooth, 0, 2);
         if (GUILayout.Button("生成"))
         {
             GenerateSDF();
@@ -70,6 +76,7 @@ public class SDFGenerator : EditorWindow
         if (texs.Count > 0)
         {
             slider = EditorGUILayout.Slider("缩放", slider, 0, 1);
+            scrollPosition = GUILayout.BeginScrollView(scrollPosition);
             for (int i = 0; i < texs.Count; i++)
             {
                 GUILayout.BeginHorizontal();
@@ -78,6 +85,12 @@ public class SDFGenerator : EditorWindow
 
                 GUILayout.EndHorizontal();
 
+            }
+            GUILayout.EndScrollView();
+
+            if (GUILayout.Button("clear"))
+            {
+                texs.Clear();
             }
         }
       
@@ -197,9 +210,7 @@ public class SDFGenerator : EditorWindow
                    Graphics.CopyTexture(ot1, 0,0,texArray, i, 0);
                    if(ot1 != null)ot1 = null;
                    if(rt1 != null)rt1 = null;
-
                 }
-
                 
                 RenderTexture ot2 = new RenderTexture((int)size.x, (int)size.y, 32, RenderTextureFormat.ARGB32);
                 ot2.enableRandomWrite = true;
@@ -207,9 +218,9 @@ public class SDFGenerator : EditorWindow
                 
                 kernel = cs.FindKernel("MultiTexture");
                 cs.SetInt("Count", texArray.volumeDepth);
+                cs.SetFloat("Smooth", smooth);
                                 
                 cs.SetTexture(kernel, "TextureArray", texArray);
-                
                 cs.SetTexture(kernel, "_OutputTexture", ot2);
 
                 uint x2, y2, z2;
