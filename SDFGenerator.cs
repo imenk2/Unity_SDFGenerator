@@ -60,14 +60,14 @@ public class SDFGenerator : EditorWindow
                     dataPath = EditorUtility.OpenFolderPanel("", Application.dataPath, "");
                     LoadTextures(dataPath);
                 }
+                smooth = EditorGUILayout.Slider("Smooth", smooth, 0, 2);
 
                 break;
         }
 
         cs = EditorGUILayout.ObjectField("Shader", cs, typeof(ComputeShader)) as ComputeShader;
-
         spread = EditorGUILayout.IntField("Spread", spread);
-        smooth = EditorGUILayout.Slider("Smooth", smooth, 0, 2);
+        
         if (GUILayout.Button("生成"))
         {
             GenerateSDF();
