@@ -1,0 +1,109 @@
+#pragma kernel CSMain
+#pragma kernel MultiTexture
+
+#pragma multi_compile_local _ CHANNEL_A
+
+int _HalfRange;
+Texture2D _MainTex;
+int4 _MainTex_Size;
+
+RWTexture2D<float4> _OutputTexture;
+
+uint squaredDistanceBetween(int2 uv1, int2 uv2) {
+    int2 delta = uv1 - uv2;
+    uint dist = (delta.x * delta.x) + (delta.y * delta.y);
+    return dist;
+}
+
+bool isIn(int2 coord) {
+    if (coord.x < 0 || coord.y < 0 || coord.x >= _MainTex_Size.x || coord.y >= _MainTex_Size.y)
+    {
+        return false;
+    }
+    
+    #if defined(CHANNEL_A)
+    return _MainTex[coord.xy].a > 0;
+    #endif
+    
+    return _MainTex[coord.xy].r > 0;
+
+}
+
+[numthreads(8,8,1)]
+void CSMain(uint3 id : SV_DispatchThreadID)
+{
+
+    int2 coord = id.xy;
+
+    const int halfRange = _HalfRange;
+    const int iRange = 2 * halfRange;
+
+    const int2 startPosition = coord - int2(halfRange, halfRange);
+
+    bool fragIsIn = isIn(coord);
+    
+    uint squaredDistanceToEdge = (halfRange*halfRange)*2;
+
+    for (int dx = 0; dx <= iRange; dx++) {
+
+        for (int dy = 0; dy <= iRange; dy++) {
+            int2 scanPositionCoord = startPosition + int2(dx, dy);
+
+            bool scanIsIn = isIn(scanPositionCoord);
+            if (scanIsIn != fragIsIn) {
+                uint scanDistance = squaredDistanceBetween(coord, scanPositionCoord);
+                if (scanDistance < squaredDistanceToEdge) {
+                    squaredDistanceToEdge = scanDistance;
+                }
+            }
+        }
+    }
+
+
+    float normalised = squaredDistanceToEdge / ((halfRange*halfRange)*2.0);
+    float distanceToEdge = sqrt(normalised);
+    if (fragIsIn)
+        distanceToEdge = -distanceToEdge;
+
+    normalised = 0.5 - distanceToEdge;
+
+    float4 val = 1;
+    #if defined(CHANNEL_A)
+    val.xyz = _MainTex[id.xy].xyz;
+    val.a = normalised;
+    #else
+    val.rgb = normalised;
+    val.a = _MainTex[id.xy].w;
+    #endif
+
+    _OutputTexture[id.xy] = val;
+
+}
+
+RWTexture2DArray<float4> TextureArray;
+int Count;
+
+float SmoothUnion(float sdf1, float sdf2, float bandwidth)
+{
+    float h = saturate(0.5 + 0.5 * (sdf2 - sdf1) / bandwidth);
+    return lerp(sdf2, sdf1, h) - bandwidth * h * (1.0 - h);
+}
+
+float SmoothIntersection(float sdf1, float sdf2, float bandwidth)
+{
+    float h = saturate(0.5 - 0.5 * (sdf2 - sdf1) / bandwidth);
+    return lerp(sdf2, sdf1, h) + bandwidth * h * (1.0 - h);
+}
+
+[numthreads(8,8,1)]
+void MultiTexture (uint3 id : SV_DispatchThreadID)
+{
+    float sum = 0;
+    for (int i = 1; i < Count; i++)
+    {
+        float sdf1 = TextureArray[uint3(id.xy, i-1)].r;
+        float sdf2 = TextureArray[uint3(id.xy, i)].r;
+        sum += SmoothIntersection(sdf1, sdf2, 1/_HalfRange);
+    }
+    _OutputTexture[id.xy] = float4(sum / Count, 0,0,1);
+}
